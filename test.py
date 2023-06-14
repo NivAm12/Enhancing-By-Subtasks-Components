@@ -24,9 +24,14 @@ with open(file_path, "r", errors='ignore') as file:
 
         row = {
             'source_sentence': source_sentence,
-            'compare_sentence': compare_sentence
+            'compare_sentence': compare_sentence,
+            'label': 1
         }
         data.append(row)
+
+        # this is how we classify 
+        # tokens = tokenizer(source_sentence, compare_sentence, return_tensors='pt')
+        # output = model(**tokens)
 
 # Transform the list of dictionaries into a dictionary of lists
 data_dict = {key: [item[key] for item in data] for key in data[0]}
