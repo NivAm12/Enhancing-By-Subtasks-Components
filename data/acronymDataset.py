@@ -27,9 +27,13 @@ class AcronymDataset:
                 row = {
                     'source_sentence': source_sentence,
                     'compare_sentence': compare_sentence,
-                    'label': 1
+                    'label': 1,
+                    'acronym': split[0]
                 }
                 data.append(row)
 
         data_dict = {key: [item[key] for item in data] for key in data[0]}
         self._dataset = Dataset.from_dict(data_dict)
+
+    def _create_negative_examples(self):
+        pass
