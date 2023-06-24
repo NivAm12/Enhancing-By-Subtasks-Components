@@ -1,9 +1,13 @@
 from datasets import Dataset
 import pandas as pd
 import random
+import pickle
+import os
+
 
 class AcronymDataset:
     def __init__(self, file_path, tokenizer):
+        self._cache_file = "data/acronym_dataset.pkl"
         self._file_path = file_path
         self._dataset = None
         self.tokenizer = tokenizer
@@ -16,9 +20,18 @@ class AcronymDataset:
         return self._dataset
     
     def __create_dataset(self):
-        self.__create_examples()
-        self.__create_negative_examples()
-        self._dataset = Dataset.from_pandas(self._dataset)
+        if os.path.exists(self._cache_file):
+            # Load the dataset from cache
+            print('[INFO] Dataset already been loaded, using the cached dataset..')
+            with open(self._cache_file, "rb") as file:
+                self._dataset = pickle.load(file)
+        else:
+            self.__create_examples()
+            self.__create_negative_examples()
+            self._dataset = Dataset.from_pandas(self._dataset)
+                # Save the dataset to cache for future use
+            with open(self._cache_file, "wb") as file:
+                pickle.dump(self._dataset, file)
 
     def __create_examples(self):
         data = []
@@ -58,7 +71,7 @@ class AcronymDataset:
             full_names = group['full_name'].unique().tolist()
 
             # loop over the samples of this group and create a negative sample
-            for i, positive_sample in group.iterrows():
+            for _, positive_sample in group.iterrows():
                 positive_sample_full_name = positive_sample['full_name']
                 negative_full_names_options = full_names.copy()
                 negative_full_names_options.remove(positive_sample_full_name)
@@ -83,7 +96,10 @@ class AcronymDataset:
             groups_list.append(group)  
 
         # merge the groups again
-        self._dataset = pd.concat(groups_list, axis=0)             
+        self._dataset = pd.concat(groups_list, axis=0)
+
+    def __remove_duplicates(self):
+        pass                
 
     def preprocss_dataset(self):
         preprocessed_dataset = self._dataset.map(self.__preprocess_func) 
