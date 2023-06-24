@@ -29,7 +29,8 @@ class AcronymDataset:
             self.__create_examples()
             self.__create_negative_examples()
             self._dataset = Dataset.from_pandas(self._dataset)
-                # Save the dataset to cache for future use
+
+            # Save the dataset to cache for future use
             with open(self._cache_file, "wb") as file:
                 pickle.dump(self._dataset, file)
 
@@ -69,37 +70,39 @@ class AcronymDataset:
         for _, group in groups:
             # get all of the full names for this acronym group
             full_names = group['full_name'].unique().tolist()
+            delete_indexs = []
 
             # loop over the samples of this group and create a negative sample
-            for _, positive_sample in group.iterrows():
-                positive_sample_full_name = positive_sample['full_name']
-                negative_full_names_options = full_names.copy()
-                negative_full_names_options.remove(positive_sample_full_name)
+            for index, positive_sample in group.iterrows():
+                # check if we want to create a negative sample and delete the true sample, because we don't want to keep duplicates of the same sentence
+                if random.randint(1, 3) == 1:
+                    positive_sample_full_name = positive_sample['full_name']
+                    negative_full_names_options = full_names.copy()
+                    negative_full_names_options.remove(positive_sample_full_name)
 
-                if len(negative_full_names_options) > 0:
-                    random_false_full_name = random.choice(negative_full_names_options)
+                    if len(negative_full_names_options) > 0:
+                        random_false_full_name = random.choice(negative_full_names_options)
 
-                    # create a compare sentence with a false full name
-                    true_compare_sentence = positive_sample['compare_sentence']
-                    full_name_start_index = true_compare_sentence.find(positive_sample['full_name'])
-                    full_name_end_index = full_name_start_index + len(positive_sample['full_name'])
+                        # create a compare sentence with a false full name
+                        true_compare_sentence = positive_sample['compare_sentence']
+                        full_name_start_index = true_compare_sentence.find(positive_sample['full_name'])
+                        full_name_end_index = full_name_start_index + len(positive_sample['full_name'])
 
-                    false_compare_sentence = true_compare_sentence[:full_name_start_index] + random_false_full_name + true_compare_sentence[full_name_end_index:]
-                    negative_example = positive_sample.copy()
-                    negative_example['compare_sentence'] = false_compare_sentence
-                    negative_example['full_name'] = random_false_full_name
-                    negative_example['label'] = 0
-                    
-                    # insert it to the group
-                    group.loc[len(group)] = negative_example
+                        false_compare_sentence = true_compare_sentence[:full_name_start_index] + random_false_full_name + true_compare_sentence[full_name_end_index:]
+                        negative_example = positive_sample.copy()
+                        negative_example['compare_sentence'] = false_compare_sentence
+                        negative_example['full_name'] = random_false_full_name
+                        negative_example['label'] = 0
+                        
+                        # insert it to the group
+                        group.loc[len(group)] = negative_example
+                        delete_indexs.append(index)
 
+            group = group.drop(delete_indexs)
             groups_list.append(group)  
 
         # merge the groups again
-        self._dataset = pd.concat(groups_list, axis=0)
-
-    def __remove_duplicates(self):
-        pass                
+        self._dataset = pd.concat(groups_list, axis=0)              
 
     def preprocss_dataset(self):
         preprocessed_dataset = self._dataset.map(self.__preprocess_func) 
