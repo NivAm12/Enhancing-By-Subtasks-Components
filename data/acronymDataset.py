@@ -1,5 +1,6 @@
 from datasets import Dataset
 import pandas as pd
+import random
 
 class AcronymDataset:
     def __init__(self, file_path, tokenizer):
@@ -16,7 +17,8 @@ class AcronymDataset:
     
     def __create_dataset(self):
         self.__create_examples()
-
+        self.__create_negative_examples()
+        self._dataset = Dataset.from_pandas(self._dataset)
 
     def __create_examples(self):
         data = []
@@ -44,10 +46,44 @@ class AcronymDataset:
                 data.append(row)
 
         data_dict = {key: [item[key] for item in data] for key in data[0]}
-        self._dataset = Dataset.from_dict(data_dict)
+        self._dataset = pd.DataFrame.from_dict(data_dict)
 
     def __create_negative_examples(self):
-        pass
+        groups = self._dataset.groupby('acronym')
+        groups_list = []
+
+        # loop each one of the acronym groups
+        for _, group in groups:
+            # get all of the full names for this acronym group
+            full_names = group['full_name'].unique().tolist()
+
+            # loop over the samples of this group and create a negative sample
+            for i, positive_sample in group.iterrows():
+                positive_sample_full_name = positive_sample['full_name']
+                negative_full_names_options = full_names.copy()
+                negative_full_names_options.remove(positive_sample_full_name)
+
+                if len(negative_full_names_options) > 0:
+                    random_false_full_name = random.choice(negative_full_names_options)
+
+                    # create a compare sentence with a false full name
+                    true_compare_sentence = positive_sample['compare_sentence']
+                    full_name_start_index = true_compare_sentence.find(positive_sample['full_name'])
+                    full_name_end_index = full_name_start_index + len(positive_sample['full_name'])
+
+                    false_compare_sentence = true_compare_sentence[:full_name_start_index] + random_false_full_name + true_compare_sentence[full_name_end_index:]
+                    negative_example = positive_sample.copy()
+                    negative_example['compare_sentence'] = false_compare_sentence
+                    negative_example['full_name'] = random_false_full_name
+                    negative_example['label'] = 0
+                    
+                    # insert it to the group
+                    group.loc[len(group)] = negative_example
+
+            groups_list.append(group)  
+
+        # merge the groups again
+        self._dataset = pd.concat(groups_list, axis=0)             
 
     def preprocss_dataset(self):
         preprocessed_dataset = self._dataset.map(self.__preprocess_func) 
