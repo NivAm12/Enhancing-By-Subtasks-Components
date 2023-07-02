@@ -5,10 +5,11 @@ import pickle
 import os
 from torch.utils.data import random_split, DataLoader
 from transformers import DataCollatorForTokenClassification
+from transformers import AutoTokenizer
 
 
 class AcronymDataset:
-    def __init__(self, file_path, tokenizer):
+    def __init__(self, file_path: str, tokenizer: AutoTokenizer):
         self._cache_file = "data/acronym_dataset.pkl"
         self._file_path = file_path
         self._dataset = None
@@ -23,8 +24,7 @@ class AcronymDataset:
                 
     def preprocss_dataset(self):
         preprocessed_dataset = self._dataset.map(self.__preprocess_func)
-        # preprocessed_dataset.set_format('torch') 
-        preprocessed_dataset = preprocessed_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", "label"])
+        preprocessed_dataset = preprocessed_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", "labels"])
         self.preprocessed_dataset = preprocessed_dataset
 
     def get_dataloaders(self, train_size: float, batch_size: int):
@@ -69,6 +69,7 @@ class AcronymDataset:
             self.__create_examples()
             self.__create_negative_examples()
             self._dataset = Dataset.from_pandas(self._dataset)
+            self._dataset.set_format('torch')
 
             # Save the dataset to cache for future use
             with open(self._cache_file, "wb") as file:
@@ -93,7 +94,7 @@ class AcronymDataset:
                 row = {
                     'source_sentence': source_sentence,
                     'compare_sentence': compare_sentence,
-                    'label': 1,
+                    'labels': [1],
                     'acronym': split[0],
                     'full_name': full_name
                 }
@@ -132,7 +133,7 @@ class AcronymDataset:
                         negative_example = positive_sample.copy()
                         negative_example['compare_sentence'] = false_compare_sentence
                         negative_example['full_name'] = random_false_full_name
-                        negative_example['label'] = 0
+                        negative_example['labels'] = [0]
                         
                         # insert it to the group
                         group.loc[len(group)] = negative_example
