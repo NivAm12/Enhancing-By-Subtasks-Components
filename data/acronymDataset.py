@@ -3,6 +3,8 @@ import pandas as pd
 import random
 import pickle
 import os
+from torch.utils.data import random_split, DataLoader
+from transformers import DataCollatorForTokenClassification
 
 
 class AcronymDataset:
@@ -18,7 +20,45 @@ class AcronymDataset:
     @property
     def data(self):
         return self._dataset
-    
+                
+    def preprocss_dataset(self):
+        preprocessed_dataset = self._dataset.map(self.__preprocess_func)
+        # preprocessed_dataset.set_format('torch') 
+        preprocessed_dataset = preprocessed_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", "label"])
+        self.preprocessed_dataset = preprocessed_dataset
+
+    def get_dataloaders(self, train_size: float, batch_size: int):
+        if self.preprocessed_dataset is None:
+            raise ValueError("Preprocessed dataset is not available, create it by using preprocss_dataset before using this method.")    
+
+        # Calculate the number of samples to include in each set.
+        train_size = int(train_size * len(self.preprocessed_dataset))
+        val_size = len(self.preprocessed_dataset) - train_size
+
+        # split the dataset
+        train_dataset, val_dataset = random_split(self.preprocessed_dataset, [train_size, val_size])
+        # dynamic padding
+        data_collator = DataCollatorForTokenClassification(tokenizer=self.tokenizer, return_tensors="pt", padding=True)
+
+        # Create the DataLoaders
+        train_dataloader = DataLoader(
+                    train_dataset,
+                    batch_size = batch_size,
+                    collate_fn=data_collator,
+                    shuffle=True,
+                    drop_last=True,
+                )
+        
+        val_dataloader = DataLoader(
+                    val_dataset,
+                    batch_size = batch_size,
+                    collate_fn=data_collator,
+                    shuffle=True,
+                    drop_last=True,
+                )
+
+        return train_dataloader, val_dataloader
+
     def __create_dataset(self):
         if os.path.exists(self._cache_file):
             # Load the dataset from cache
@@ -102,25 +142,18 @@ class AcronymDataset:
             groups_list.append(group)  
 
         # merge the groups again
-        self._dataset = pd.concat(groups_list, axis=0)              
+        self._dataset = pd.concat(groups_list, axis=0)  
 
-    def preprocss_dataset(self):
-        preprocessed_dataset = self._dataset.map(self.__preprocess_func) 
-        preprocessed_dataset.set_format('torch') 
-        preprocessed_dataset = preprocessed_dataset.remove_columns(['source_sentence', 'compare_sentence', 'acronym', 'full_name'])
-
-        self.preprocessed_dataset = preprocessed_dataset
-
-    def __preprocess_func(self, examples):
+    def __preprocess_func(self, example):
         # attach special tokens to the acronym and full name to attract attention from the model
-        acronym_start_index = examples['source_sentence'].find(examples['acronym'])
-        acronym_end_index = acronym_start_index + len(examples['acronym']) + 1
-        full_name_start_index = examples['compare_sentence'].find(examples['full_name'])
-        full_name_end_index = full_name_start_index + len(examples['full_name']) + 1
+        acronym_start_index = example['source_sentence'].find(example['acronym'])
+        acronym_end_index = acronym_start_index + len(example['acronym']) + 1
+        full_name_start_index = example['compare_sentence'].find(example['full_name'])
+        full_name_end_index = full_name_start_index + len(example['full_name']) + 1
 
-        source_sentence = examples['source_sentence'][:acronym_start_index] + '<start>' + examples['acronym'] + '<end>' + examples['source_sentence'][acronym_end_index:]
-        compare_sentence = examples['compare_sentence'][:full_name_start_index] + '<start>' + examples['full_name']  + '<end>' + examples['compare_sentence'][full_name_end_index:]
+        source_sentence = example['source_sentence'][:acronym_start_index] + '<start>' + example['acronym'] + '<end>' + example['source_sentence'][acronym_end_index:]
+        compare_sentence = example['compare_sentence'][:full_name_start_index] + '<start>' + example['full_name']  + '<end>' + example['compare_sentence'][full_name_end_index:]
 
-        result = self.tokenizer(source_sentence, compare_sentence, truncation=True, return_tensors='pt')
+        result = self.tokenizer(source_sentence, compare_sentence, truncation=True)
         
         return result
