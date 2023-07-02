@@ -4,7 +4,7 @@ import random
 import pickle
 import os
 from torch.utils.data import random_split, DataLoader
-from transformers import DataCollatorForTokenClassification
+from transformers import DataCollatorWithPadding
 from transformers import AutoTokenizer
 
 
@@ -38,7 +38,7 @@ class AcronymDataset:
         # split the dataset
         train_dataset, val_dataset = random_split(self.preprocessed_dataset, [train_size, val_size])
         # dynamic padding
-        data_collator = DataCollatorForTokenClassification(tokenizer=self.tokenizer, return_tensors="pt", padding=True)
+        data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer, return_tensors="pt", padding=True)
 
         # Create the DataLoaders
         train_dataloader = DataLoader(
@@ -94,7 +94,7 @@ class AcronymDataset:
                 row = {
                     'source_sentence': source_sentence,
                     'compare_sentence': compare_sentence,
-                    'labels': [1],
+                    'labels': 1,
                     'acronym': split[0],
                     'full_name': full_name
                 }
@@ -133,7 +133,7 @@ class AcronymDataset:
                         negative_example = positive_sample.copy()
                         negative_example['compare_sentence'] = false_compare_sentence
                         negative_example['full_name'] = random_false_full_name
-                        negative_example['labels'] = [0]
+                        negative_example['labels'] = 0
                         
                         # insert it to the group
                         group.loc[len(group)] = negative_example
