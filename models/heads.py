@@ -14,8 +14,8 @@ class ClassificationHead(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        x = self.dropout(x[0])
-        x = self.mean(x, dim=1)
+        x = self.dropout(x[1]) # 0 is the index of cls token
+        # x = self.mean(x, dim=1)
         x = self.linear(x)
         x = self.sigmoid(x)
         return x
