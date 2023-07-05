@@ -11,14 +11,14 @@ class ClassificationHead(nn.Module):
         self.dropout = nn.Dropout(0.1, inplace=False)
         self.mean = torch.mean
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
-        self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax()
 
-    def forward(self, x):
-        x = self.dropout(x[1]) # 0 is the index of cls token
-        # x = self.mean(x, dim=1)
-        x = self.linear(x)
-        x = self.sigmoid(x)
-        return x
+    def forward(self, inputs):
+        outputs = self.dropout(inputs.pooler_output) # 0 is the index of cls token
+        outputs = self.linear(outputs)
+        outputs = self.softmax(outputs)
+
+        return outputs
 
 class BERT_CRF(nn.Module):
 
