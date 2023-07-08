@@ -14,6 +14,8 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
         head_prop = [head_prop['train_loader'] for head_prop in heads_props.values()]
 
         for i, combined_batch in enumerate(zip(*head_prop)):
-            pass
-            print(combined_batch[0].input_ids.shape, combined_batch[1].input_ids.shape)
+            loss = None
 
+            for task_batch, head_name in zip(combined_batch, heads_props.keys()):
+                output = multi_head_model(task_batch, head_name)
+                
