@@ -27,7 +27,7 @@ class AcronymDataset:
         preprocessed_dataset = preprocessed_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", "labels"])
         self.preprocessed_dataset = preprocessed_dataset
 
-    def get_dataloaders(self, train_size: float, batch_size: int):
+    def get_dataloaders(self, train_size: float=0.9, batch_size: int=32, shuffle: bool=True):
         if self.preprocessed_dataset is None:
             raise ValueError("Preprocessed dataset is not available, create it by using preprocss_dataset before using this method.")    
 
@@ -45,7 +45,7 @@ class AcronymDataset:
                     train_dataset,
                     batch_size = batch_size,
                     collate_fn=data_collator,
-                    shuffle=True,
+                    shuffle=shuffle,
                     drop_last=True,
                 )
         
@@ -53,7 +53,7 @@ class AcronymDataset:
                     val_dataset,
                     batch_size = batch_size,
                     collate_fn=data_collator,
-                    shuffle=True,
+                    shuffle=shuffle,
                     drop_last=True,
                 )
 
