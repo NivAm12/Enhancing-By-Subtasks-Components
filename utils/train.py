@@ -15,7 +15,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
         train_loaders = [head_prop['train_loader'] for head_prop in heads_props.values()]
 
         # iterate the batches simultaneously
-        for i, combined_batch in tqdm(enumerate(zip(*train_loaders))):
+        for i, combined_batch in enumerate(zip(*train_loaders)):
             loss = None
 
             for task_batch, head_name in zip(combined_batch, heads_props.keys()):
