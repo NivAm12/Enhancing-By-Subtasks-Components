@@ -6,17 +6,24 @@ from TorchCRF import CRF
 
 
 class ClassificationHead(nn.Module):
-    def __init__(self, in_features, out_features):
+    """
+    A classification head for a language model.
+
+    Args:
+        in_features (int): The number of input features.
+        out_features (int): The number of output features.
+    """
+    def __init__(self, in_features: int, out_features: int):
         super(ClassificationHead, self).__init__()
         self.dropout = nn.Dropout(0.1, inplace=False)
         self.mean = torch.mean
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
-        self.softmax = nn.Softmax()
+        self.activation = nn.Sigmoid() if out_features == 2 else nn.Softmax()
 
     def forward(self, inputs):
         outputs = self.dropout(inputs.pooler_output) # 0 is the index of cls token
         outputs = self.linear(outputs)
-        outputs = self.softmax(outputs)
+        outputs = self.activation(outputs)
 
         return outputs
 
