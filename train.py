@@ -6,6 +6,7 @@ from transformers import AutoConfig, AutoTokenizer, AutoModel
 from data.acronymDataset import AcronymDataset
 from models.multiHeadModel import MultiHeadModel
 from models.heads import ClassificationHead
+import os
 
 
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
@@ -22,7 +23,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
         # iterate the batches simultaneously
         for i, combined_batch in enumerate(zip(*train_loaders)):
-            step_loss = 0
+            step_loss = 0.0
             optim.zero_grad()
 
             for task_batch, head_name in zip(combined_batch, heads_props.keys()):
@@ -40,15 +41,26 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
             optim.step()
             wandb.log({'loss': step_loss})
 
+        # save the model at each epoch
+        if not os.path.exist(train_args["save_path"]):
+            os.mkdir(train_args["save_path"])
+
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': multi_head_model.state_dict(),
+            'optimizer_state_dict': optim.state_dict(),
+        }, f'{train_args["save_path"]}/multi_head_epoch{epoch}.pt')
+
 
 if __name__ == '__main__':
 
     train_args = {
         "epochs": 10,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "lr": 0.001,
+        "lr": 0.01,
         "optim": torch.optim.AdamW,
-        "batch_size": 32
+        "batch_size": 32,
+        "save_path": "models/weights"
     }
      
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
