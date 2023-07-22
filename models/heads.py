@@ -18,7 +18,7 @@ class ClassificationHead(nn.Module):
         self.dropout = nn.Dropout(0.1, inplace=False)
         self.mean = torch.mean
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
-        self.activation = nn.Sigmoid() if out_features == 2 else nn.Softmax()
+        self.activation = nn.Sigmoid() if out_features == 1 else nn.Softmax()
 
     def forward(self, inputs):
         outputs = self.dropout(inputs.pooler_output) # 0 is the index of cls token
