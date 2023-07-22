@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import wandb
-import numpy as np
 from transformers import AutoConfig, AutoTokenizer, AutoModel
 from data.acronymDataset import AcronymDataset
 from models.multiHeadModel import MultiHeadModel
@@ -15,7 +14,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     for model_head in multi_head_model.heads.values():
         model_head.train()
 
-    optim = train_args["optim"](multi_head_model.parameters(), lr=0.001)
+    optim = train_args["optim"](multi_head_model.parameters(), lr=train_args["lr"])
 
     for epoch in tqdm(range(train_args["epochs"])):
         # create the data loaders list
@@ -40,7 +39,6 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
             step_loss.backward()
             optim.step()
             wandb.log({'loss': step_loss})
-
 
 
 if __name__ == '__main__':
@@ -77,7 +75,6 @@ if __name__ == '__main__':
 
     train_loader_for_acronym, _ = dataset.get_dataloaders(train_size=0.9, batch_size=train_args["batch_size"])
     # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
-
 
     heads_props = {
         "binari_head": {

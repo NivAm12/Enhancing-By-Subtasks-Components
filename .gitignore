@@ -2,3 +2,4 @@
 .vscode
 data/acronym_dataset.pkl
 wandb
+.idea
