@@ -12,13 +12,6 @@ import os
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     # prepare the model weights for training:    
     multi_head_model.train()
-    for model_head in multi_head_model.heads.values():
-        model_head.train()
-
-    # # Concatenate the parameters of the base model and the classifier heads
-    # parameters = list(multi_head_model.base_model.parameters())
-    # for model_head in multi_head_model.heads.values():
-    #     parameters += list(model_head.parameters())
 
     optim = train_args["optim"](multi_head_model.parameters(), lr=train_args["lr"], betas=train_args["betas"],
                                 weight_decay=train_args["weight_decay"])
@@ -42,6 +35,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
                 loss = critic(output.squeeze(), task_batch['labels'].float())
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
+
             epoch_loss += step_loss.item()
             optim.zero_grad()
             step_loss.backward()
@@ -63,7 +57,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
 if __name__ == '__main__':
     train_args = {
-        "epochs": 10,
+        "epochs": 20,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "lr": 0.01,
         "betas": (0.9, 0.999),
@@ -72,21 +66,28 @@ if __name__ == '__main__':
         "batch_size": 32,
         "save_path": "models/weights"
     }
-     
+
+
+
+    # model
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
     config = AutoConfig.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=config.max_position_embeddings)
-    pre_trained_model = AutoModel.from_pretrained(model_name).to(train_args["device"])
+    pre_trained_model = AutoModel.from_pretrained(model_name)
 
+    # data
     torch.manual_seed(5)
     file_path = 'data/acronym_data.txt'
     dataset = AcronymDataset(file_path=file_path, tokenizer=tokenizer)
     data = dataset.data
     dataset.preprocss_dataset()
 
+    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.7, batch_size=train_args["batch_size"])
+    # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
+
     in_features = config.hidden_size
-    binari_head = ClassificationHead(in_features=in_features, out_features=1).to(train_args["device"])
-    four_labels_head = ClassificationHead(in_features=in_features, out_features=4).to(train_args["device"])
+    binari_head = ClassificationHead(in_features=in_features, out_features=1)
+    four_labels_head = ClassificationHead(in_features=in_features, out_features=4)
 
     classifiers = torch.nn.ModuleDict({
         "binari_head": binari_head,
@@ -94,9 +95,7 @@ if __name__ == '__main__':
     })
 
     multi_head_model = MultiHeadModel(pre_trained_model, classifiers)
-
-    train_loader_for_acronym, _ = dataset.get_dataloaders(train_size=0.7, batch_size=train_args["batch_size"])
-    # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
+    multi_head_model.to(train_args['device'])
 
     heads_props = {
         "binari_head": {
