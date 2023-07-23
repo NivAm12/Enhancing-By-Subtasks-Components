@@ -10,6 +10,18 @@ import os
 
 
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
+    """
+    Trains a multi-head model.
+
+    Args:
+        multi_head_model (nn.Module): The multi-head model to train.
+        heads_props (dict): A dictionary of head properties, where each key is the head name and each value is a dictionary of head properties.
+        train_args (dict): A dictionary of training arguments.
+
+    Returns:
+        None.
+    """
+
     # prepare the model weights for training:    
     multi_head_model.train()
 
