@@ -15,7 +15,13 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     for model_head in multi_head_model.heads.values():
         model_head.train()
 
-    optim = train_args["optim"](multi_head_model.parameters(), lr=train_args["lr"])
+    # Concatenate the parameters of the base model and the classifier heads
+    parameters = list(multi_head_model.base_model.parameters())
+    for model_head in multi_head_model.heads.values():
+        parameters += list(model_head.parameters())
+
+    optim = train_args["optim"](parameters, lr=train_args["lr"], betas=train_args["betas"],
+                                weight_decay=train_args["weight_decay"])
 
     for epoch in tqdm(range(train_args["epochs"])):
         # create the data loaders list
@@ -24,7 +30,6 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
         # iterate the batches simultaneously
         for i, combined_batch in enumerate(zip(*train_loaders)):
             step_loss = 0.0
-            optim.zero_grad()
 
             for task_batch, head_name in zip(combined_batch, heads_props.keys()):
                 critic = heads_props[head_name]['loss_func']
@@ -35,14 +40,15 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
                 loss = critic(output.squeeze(), task_batch['labels'].float())
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
-                wandb.log({f'{head_name}_loss': loss})
+                # wandb.log({f'{head_name}_loss': loss})
 
+            optim.zero_grad()
             step_loss.backward()
             optim.step()
-            wandb.log({'loss': step_loss})
+            # wandb.log({'loss': step_loss})
 
         # save the model at each epoch
-        if not os.path.exist(train_args["save_path"]):
+        if not os.path.exists(train_args["save_path"]):
             os.mkdir(train_args["save_path"])
 
         torch.save({
@@ -53,11 +59,12 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
 
 if __name__ == '__main__':
-
     train_args = {
         "epochs": 10,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "lr": 0.01,
+        "lr": 0.001,
+        "betas": (0.9, 0.999),
+        "weight_decay": 0,
         "optim": torch.optim.AdamW,
         "batch_size": 32,
         "save_path": "models/weights"
@@ -101,10 +108,10 @@ if __name__ == '__main__':
         # }
     }
 
-    run = wandb.init(
-        project="test_nlp",
-        config=train_args
-    )
+    # run = wandb.init(
+    #     project="test_nlp",
+    #     config=train_args
+    # )
 
     train(multi_head_model, heads_props, train_args)
 
