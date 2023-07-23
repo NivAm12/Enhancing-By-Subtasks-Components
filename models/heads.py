@@ -1,8 +1,6 @@
 import torch.nn as nn
 import torch
-
 from TorchCRF import CRF
-
 
 
 class ClassificationHead(nn.Module):
