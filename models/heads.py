@@ -46,7 +46,7 @@ class NERHead(nn.Module):
         input_ids: shape - (batch_size, seq_len)
         labels - if note None, calculate loss. Else, calculate predictions.
         """
-        crf_mask = inputs['token_type_ids']
+        crf_mask = batch['token_type_ids']
         embeddings = inputs["last_hidden_state"]
         embeddings = self.dropout(embeddings)
         emission_scores = self.classifier(embeddings) # shape: (batch_size, seq_len, num_labels)
