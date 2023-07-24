@@ -17,6 +17,7 @@ class AcronymDataset:
         self.preprocessed_dataset = None
 
         self.__create_dataset()
+        self.preprocessed_dataset()
     
     @property
     def data(self):
