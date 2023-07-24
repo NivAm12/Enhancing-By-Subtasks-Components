@@ -13,7 +13,7 @@ import argparse
 from datasets import load_from_disk
 
 
-def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
+def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.ArgumentParser):
     """
     Trains a multi-head model.
 
@@ -30,7 +30,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     multi_head_model.train()
 
     optim = train_args.optim(multi_head_model.parameters(), lr=train_args.lr, betas=train_args.betas,
-                                weight_decay=train_args.weight_decay)
+                             weight_decay=train_args.weight_decay)
 
     for epoch in tqdm(range(train_args.epochs)):
         epoch_loss = 0.0
@@ -45,10 +45,11 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
             for task_batch, head_name in zip(combined_batch, heads_props.keys()):
                 critic = heads_props[head_name]['loss_func']
                 task_batch = task_batch.to(train_args.device)
-                
+
                 # loss 
                 output = multi_head_model(task_batch, head_name, task_batch)
-                loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name]['loss_func'] else output
+                loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name][
+                    'loss_func'] else output
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
                 if i % 50 == 0:
@@ -77,7 +78,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Script to train your model")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
-    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"], help="Device to run training on")
+    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"],
+                        help="Device to run training on")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--betas", nargs=2, type=float, default=[0.9, 0.999], help="Betas for AdamW optimizer")
     parser.add_argument("--weight_decay", type=float, default=0, help="Weight decay for optimizer")
@@ -90,33 +92,32 @@ def parse_args():
 if __name__ == '__main__':
     train_args = parse_args()
     setattr(train_args, 'optim', torch.optim.AdamW)
-    
-# ----------------------------- Model ------------------------------------------------------------
+
+    # ----------------------------- Model ------------------------------------------------------------
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
     config = AutoConfig.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=config.max_position_embeddings)
     pre_trained_model = AutoModel.from_pretrained(model_name)
 
-# ----------------------------- Data ------------------------------------------------------------
+    # ----------------------------- Data ------------------------------------------------------------
     torch.manual_seed(train_args.seed)
     # acronym
     acronym_data_file_path = 'data/acronym_data.txt'
     acronym_dataset = AcronymDataset(file_path=acronym_data_file_path, tokenizer=tokenizer)
     train_loader_for_acronym, val_loader_for_acronym = acronym_dataset.get_dataloaders(train_size=0.9,
-                                                                               batch_size=train_args.batch_size)
-    
+                                                                                       batch_size=128)
     # n2c2
     n2c2_dataset_path = 'data/RelationExtraction/n2c2_dataset'
     n2c2_dataset = load_from_disk(n2c2_dataset_path)
 
     # NER
-    medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer, train_size=0.9, batch_size=train_args.batch_size)
+    medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer, train_size=0.9, batch_size=8)
     ner_dataloaders = medical_ner_dataset.get_dataloaders()
     ner_train_dataloader = ner_dataloaders["train"]
     ner_val_dataloader = ner_dataloaders["validation"]
 
     # RC
-    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9, batch_size=train_args.batch_size)
+    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9, batch_size=128)
     rc_dataloaders = medical_rc_dataset.get_dataloaders()
     rc_train_dataloader = rc_dataloaders["train"]
     rc_val_dataloader = rc_dataloaders["validation"]
@@ -124,16 +125,14 @@ if __name__ == '__main__':
     # ----------------------------- Headers ------------------------------------------------------------
     in_features = config.hidden_size
     acronym_head = ClassificationHead(in_features=in_features, out_features=1)
-    ner_head = NERHead(num_labels=len(medical_ner_dataset.id_2_label))
-    rc_head = RelationClassificationHead(num_labels=1)
-
+    ner_head = NERHead(hidden_size=in_features, num_labels=len(medical_ner_dataset.id_2_label))
+    rc_head = RelationClassificationHead(hidden_size=in_features, num_labels=1)
 
     classifiers = torch.nn.ModuleDict({
         "acronym_head": acronym_head,
         "ner_head": ner_head,
         "rc_head": rc_head
     })
-
 
     multi_head_model = MultiHeadModel(pre_trained_model, classifiers)
     multi_head_model.to(train_args.device)
