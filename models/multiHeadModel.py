@@ -24,9 +24,9 @@ class MultiHeadModel(nn.Module):
         self.base_model = base_model
         self.heads = classifier_heads
 
-    def forward(self, tokens, head_to_use: str):
-        outputs = self.base_model(input_ids=tokens['input_ids'], attention_mask=tokens['attention_mask'],
-                                  token_type_ids=tokens['token_type_ids'])
+    def forward(self, inputs, head_to_use: str):
+        outputs = self.base_model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'],
+                                  token_type_ids=inputs['token_type_ids'])
         outputs = self.heads[head_to_use](outputs)
 
         return outputs

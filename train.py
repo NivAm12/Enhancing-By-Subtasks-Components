@@ -46,6 +46,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
                 
                 # loss 
                 output = multi_head_model(task_batch, head_name)
+                # TODO handle crf loss
                 loss = critic(output.squeeze(), task_batch['labels'].float())
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
@@ -85,7 +86,6 @@ def parse_args():
 
 
 if __name__ == '__main__':
-
     train_args = parse_args()
     setattr(train_args, 'optim', torch.optim.AdamW)
     

@@ -14,12 +14,12 @@ class ClassificationHead(nn.Module):
     """
     def __init__(self, in_features: int, out_features: int):
         super(ClassificationHead, self).__init__()
-        self.dropout = nn.Dropout(0.2, inplace=False)
+        self.dropout = nn.Dropout(0.25, inplace=False)
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
         self.activation = None if out_features == 1 else nn.Softmax()
 
-    def forward(self, inputs, **kwargs):
-        # outputs = self.dropout(inputs.pooler_output)
+    def forward(self, inputs):
+        outputs = self.dropout(inputs.pooler_output)
         outputs = self.linear(inputs.pooler_output) # pooler_output is the index of cls token
         outputs = outputs if self.activation is None else self.activation(outputs)
 
@@ -41,7 +41,7 @@ class NERHead(nn.Module):
         self.activation = nn.ReLU()
         self.crf = CRF(num_labels) #, batch_first = True)
 
-    def forward(self, inputs, **kwargs):
+    def forward(self, inputs, batch=None):
         """
         input_ids: shape - (batch_size, seq_len)
         labels - if note None, calculate loss. Else, calculate predictions.
@@ -51,7 +51,7 @@ class NERHead(nn.Module):
         embeddings = self.dropout(embeddings)
         emission_scores = self.classifier(embeddings) # shape: (batch_size, seq_len, num_labels)
         emission_scores = self.activation(emission_scores)
-        labels = None if 'labels' not in kwargs else kwargs['labels']
+        labels = batch['labels'] if batch is not None else None
         
 
         if labels is not None:
@@ -119,23 +119,23 @@ class NERHead(nn.Module):
 
 class RelationClassificationHead(nn.Module):
 
-    def __init__(self, bert_model, num_labels=2):
+    def __init__(self, num_labels=2):
         super(RelationClassificationHead, self).__init__()
         self.hidden_size = 768 # last hidden state of BERT model
-        self.bert = bert_model
         self.dropout = nn.Dropout(0.25)
         self.classifier = nn.Linear(2*768, num_labels)
         self.activation =  nn.Sigmoid()
 
 
-    def forward(self, input_ids, attention_mask,  e1_start, e2_start):
+    def forward(self, inputs, batch=None):
         """
         input_ids: shape - (batch_size, seq_len)
         e1_start: the position of the token [E1_start] in the tokinized sentence ([E1_start] is coming right before the first entity)
         e2_start: the position of the token [E2_start] in the tokinized sentence ([E2_start] is coming right before the second entity)
         """
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)               # shape: (batch_size, seq_len, embedding_dim)
-        last_hidden_state_vectors = outputs["last_hidden_state"]
+        e1_start = batch['e1_start']
+        e2_start = batch['e2_start']
+        last_hidden_state_vectors = inputs["last_hidden_state"]
         batch_size = last_hidden_state_vectors.size(0)
 
         e1_start_embedding = last_hidden_state_vectors[torch.arange(batch_size), e1_start, :] # shape: [batch_size, 768]
@@ -143,8 +143,8 @@ class RelationClassificationHead(nn.Module):
         joint_embedding = torch.cat((e1_start_embedding, e2_start_embedding), 1)              # shape: [batch_size, 2*768]
         joint_embedding = self.dropout(joint_embedding) # TODO?
         logits = self.classifier(joint_embedding)                                             # shape: [batch_size, num_labels=2]
-        scores = self.activation(logits)
-        return scores
+        # scores = self.activation(logits)
+        return logits
 
     def predict(self, input_ids, attention_mask, e1_start, e2_start):
         """
