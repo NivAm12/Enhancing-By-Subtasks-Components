@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 from TorchCRF import CRF
+import numpy as np
 
 
 class ClassificationHead(nn.Module):
@@ -17,7 +18,7 @@ class ClassificationHead(nn.Module):
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
         self.activation = None if out_features == 1 else nn.Softmax()
 
-    def forward(self, inputs):
+    def forward(self, inputs, **kwargs):
         # outputs = self.dropout(inputs.pooler_output)
         outputs = self.linear(inputs.pooler_output) # pooler_output is the index of cls token
         outputs = outputs if self.activation is None else self.activation(outputs)
@@ -32,32 +33,33 @@ class NERHead(nn.Module):
       # https://hyperscience.com/blog/exploring-conditional-random-fields-for-nlp-applications/
       # https://createmomo.github.io/archives/2017/10/
 
-    def __init__(self, bert_model, num_labels):
+    def __init__(self, num_labels):
         super(NERHead, self).__init__()
         self.hidden_size = 768 # last hidden state of BERT model
-        self.bert = bert_model
         self.dropout = nn.Dropout(0.25)
         self.classifier = nn.Linear(self.hidden_size, num_labels)
         self.activation = nn.ReLU()
         self.crf = CRF(num_labels) #, batch_first = True)
 
-    def forward(self, input_ids, attention_mask,  crf_mask, labels=None):
+    def forward(self, inputs, **kwargs):
         """
         input_ids: shape - (batch_size, seq_len)
         labels - if note None, calculate loss. Else, calculate predictions.
         """
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)  # shape: (batch_size, seq_len, embedding_dim)
-        embeddings = outputs["last_hidden_state"]
+        crf_mask = inputs['token_type_ids']
+        embeddings = inputs["last_hidden_state"]
         embeddings = self.dropout(embeddings)
         emission_scores = self.classifier(embeddings) # shape: (batch_size, seq_len, num_labels)
         emission_scores = self.activation(emission_scores)
-
+        labels = None if 'labels' not in kwargs else kwargs['labels']
+        
 
         if labels is not None:
            # we put labels with -100 to 0 because crf handles only labels in range(0, num_labels). Since this label is incorret,
            # we also create crf_mask that have 0 in indexes where lable==-100. Like that, the crf will ignore labels with -100
            # in the loss calculaion.
            # Note that we dont change the mask before the BERT layer, because we want to get information also from tokens with -100.
+
            crf_mask[labels == -100] = 0
            labels[labels == -100] = 0 
 
@@ -124,6 +126,7 @@ class RelationClassificationHead(nn.Module):
         self.dropout = nn.Dropout(0.25)
         self.classifier = nn.Linear(2*768, num_labels)
         self.activation =  nn.Sigmoid()
+
 
     def forward(self, input_ids, attention_mask,  e1_start, e2_start):
         """
