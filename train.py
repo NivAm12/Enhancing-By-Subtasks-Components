@@ -27,10 +27,10 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     # prepare the model weights for training:    
     multi_head_model.train()
 
-    optim = train_args["optim"](multi_head_model.parameters(), lr=train_args["lr"], betas=train_args["betas"],
+    optim = train_args.optim(multi_head_model.parameters(), lr=train_args.lr, betas=train_args.betas,
                                 weight_decay=train_args["weight_decay"])
 
-    for epoch in tqdm(range(train_args["epochs"])):
+    for epoch in tqdm(range(train_args.epochs)):
         epoch_loss = 0.0
 
         # create the data loaders list
@@ -42,7 +42,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
             for task_batch, head_name in zip(combined_batch, heads_props.keys()):
                 critic = heads_props[head_name]['loss_func']
-                task_batch = task_batch.to(train_args['device'])
+                task_batch = task_batch.to(train_args.device)
                 
                 # loss 
                 output = multi_head_model(task_batch, head_name)
@@ -61,14 +61,14 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
         wandb.log({'loss per epoch': epoch_loss})
 
         # save the model at each epoch
-        if not os.path.exists(train_args["save_path"]):
-            os.mkdir(train_args["save_path"])
+        if not os.path.exists(train_args.save_path):
+            os.mkdir(train_args.save_path)
 
         torch.save({
             'epoch': epoch,
             'model_state_dict': multi_head_model.state_dict(),
             'optimizer_state_dict': optim.state_dict(),
-        }, f'{train_args["save_path"]}/multi_head_epoch{epoch}.pt')
+        }, f'{train_args.save_path}/multi_head_epoch{epoch}.pt')
 
 
 def parse_args():
@@ -86,7 +86,7 @@ def parse_args():
 if __name__ == '__main__':
 
     train_args = parse_args()
-    train_args['optim'] = torch.optim.AdamW
+    setattr(train_args, 'optim', torch.optim.AdamW)
     
     # model
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
