@@ -101,7 +101,7 @@ if __name__ == '__main__':
     data = dataset.data
     dataset.preprocss_dataset()
 
-    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.2,
+    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.6,
                                                                                batch_size=train_args["batch_size"])
     # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
 
