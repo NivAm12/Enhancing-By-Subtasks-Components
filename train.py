@@ -7,6 +7,8 @@ from data.acronymDataset import AcronymDataset
 from models.multiHeadModel import MultiHeadModel
 from models.heads import ClassificationHead
 import os
+import argparse
+
 
 
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
@@ -69,18 +71,23 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
         }, f'{train_args["save_path"]}/multi_head_epoch{epoch}.pt')
 
 
-if __name__ == '__main__':
-    train_args = {
-        "epochs": 5,
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "lr": 0.01,
-        "betas": (0.9, 0.999),
-        "weight_decay": 0,
-        "optim": torch.optim.AdamW,
-        "batch_size": 32,
-        "save_path": "models/weights"
-    }
+def parse_args():
+    parser = argparse.ArgumentParser(description="Script to train your model")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"], help="Device to run training on")
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--betas", nargs=2, type=float, default=[0.9, 0.999], help="Betas for AdamW optimizer")
+    parser.add_argument("--weight_decay", type=float, default=0, help="Weight decay for optimizer")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
+    parser.add_argument("--save_path", type=str, default="models/weights", help="Path to save model weights")
+    return parser.parse_args()
 
+
+if __name__ == '__main__':
+
+    train_args = parse_args()
+    train_args['optim'] = torch.optim.AdamW
+    
     # model
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
     config = AutoConfig.from_pretrained(model_name)
@@ -88,7 +95,7 @@ if __name__ == '__main__':
     pre_trained_model = AutoModel.from_pretrained(model_name)
 
     # data
-    torch.manual_seed(5)
+    torch.manual_seed(0)
     file_path = 'data/acronym_data.txt'
     dataset = AcronymDataset(file_path=file_path, tokenizer=tokenizer)
     data = dataset.data
