@@ -10,7 +10,7 @@ from datasets.arrow_dataset import Dataset
 
 class MedicalNERDataset:
 
-    def __init__(self, dataset: Dataset, tokenizer: AutoTokenizer, inference_mode: bool = False):
+    def __init__(self, dataset: Dataset, tokenizer: AutoTokenizer, inference_mode: bool = False, batch_size: int = 32, train_size: int = 0.9):
         self._dataset = dataset
         self.tokenizer = tokenizer
         self.preprocessed_dataset = None
@@ -31,7 +31,7 @@ class MedicalNERDataset:
         if self._inference_mode:
             self.__create_inference_dataloader()
         else:
-            self.__create_dataloaders()
+            self.__create_dataloaders(train_size=train_size, batch_size=batch_size)
 
     @property
     def data(self):

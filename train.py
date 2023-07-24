@@ -101,7 +101,7 @@ if __name__ == '__main__':
     # acronym
     acronym_data_file_path = 'data/acronym_data.txt'
     acronym_dataset = AcronymDataset(file_path=acronym_data_file_path, tokenizer=tokenizer)
-    train_loader_for_acronym, val_loader_for_acronym = acronym_dataset.get_dataloaders(train_size=0.6,
+    train_loader_for_acronym, val_loader_for_acronym = acronym_dataset.get_dataloaders(train_size=0.9,
                                                                                batch_size=train_args.batch_size)
     
     # n2c2
@@ -109,13 +109,13 @@ if __name__ == '__main__':
     n2c2_dataset = load_from_disk(n2c2_dataset_path)
 
     # NER
-    medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer)
+    medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer, train_size=0.9, batch_size=train_args.batch_size)
     ner_dataloaders = medical_ner_dataset.get_dataloaders()
     ner_train_dataloader = ner_dataloaders["train"]
     ner_val_dataloader = ner_dataloaders["validation"]
 
     # RC
-    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model)
+    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9, batch_size=train_args.batch_size)
     rc_dataloaders = medical_rc_dataset.get_dataloaders()
     rc_train_dataloader = rc_dataloaders["train"]
     rc_val_dataloader = rc_dataloaders["validation"]

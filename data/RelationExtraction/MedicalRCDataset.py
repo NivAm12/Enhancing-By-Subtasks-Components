@@ -8,7 +8,7 @@ from datasets.arrow_dataset import Dataset
 
 class MedicalRCDataset:
 
-    def __init__(self, dataset : Dataset, tokenizer: AutoTokenizer, pubmedbert):
+    def __init__(self, dataset : Dataset, tokenizer: AutoTokenizer, pubmedbert, batch_size: int = 32, train_size: int = 0.9):
         self._dataset = dataset
         self.tokenizer = tokenizer
         self.pubmedbert = pubmedbert
@@ -16,7 +16,7 @@ class MedicalRCDataset:
         self._dataloaders = None
 
         self.__preprocss_dataset()
-        self.__create_dataloaders()
+        self.__create_dataloaders(train_size=train_size, batch_size=batch_size)
 
 
     @property
