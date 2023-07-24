@@ -83,6 +83,7 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0, help="Weight decay for optimizer")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--save_path", type=str, default="models/weights", help="Path to save model weights")
+    parser.add_argument("--project", type=str, default="nlp_project", help="Wandb project name to use for logs")
     return parser.parse_args()
 
 
