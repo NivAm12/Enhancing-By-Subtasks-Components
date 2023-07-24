@@ -18,7 +18,7 @@ class ClassificationHead(nn.Module):
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
         self.activation = None if out_features == 1 else nn.Softmax()
 
-    def forward(self, inputs):
+    def forward(self, inputs, batch=None):
         outputs = self.dropout(inputs.pooler_output)
         outputs = self.linear(inputs.pooler_output) # pooler_output is the index of cls token
         outputs = outputs if self.activation is None else self.activation(outputs)
@@ -33,9 +33,9 @@ class NERHead(nn.Module):
       # https://hyperscience.com/blog/exploring-conditional-random-fields-for-nlp-applications/
       # https://createmomo.github.io/archives/2017/10/
 
-    def __init__(self, num_labels):
+    def __init__(self, hidden_size, num_labels):
         super(NERHead, self).__init__()
-        self.hidden_size = 768 # last hidden state of BERT model
+        self.hidden_size = hidden_size # last hidden state of BERT model
         self.dropout = nn.Dropout(0.25)
         self.classifier = nn.Linear(self.hidden_size, num_labels)
         self.activation = nn.ReLU()
@@ -119,9 +119,9 @@ class NERHead(nn.Module):
 
 class RelationClassificationHead(nn.Module):
 
-    def __init__(self, num_labels=2):
+    def __init__(self, hidden_size, num_labels=2):
         super(RelationClassificationHead, self).__init__()
-        self.hidden_size = 768 # last hidden state of BERT model
+        self.hidden_size = hidden_size # last hidden state of BERT model
         self.dropout = nn.Dropout(0.25)
         self.classifier = nn.Linear(2*768, num_labels)
         self.activation =  nn.Sigmoid()

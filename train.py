@@ -4,11 +4,13 @@ from tqdm import tqdm
 import wandb
 from transformers import AutoConfig, AutoTokenizer, AutoModel
 from data.acronymDataset import AcronymDataset
+from data.RelationExtraction.MedicalNERDataset import MedicalNERDataset
+from data.RelationExtraction.MedicalRCDataset import MedicalRCDataset
 from models.multiHeadModel import MultiHeadModel
-from models.heads import ClassificationHead
+from models.heads import ClassificationHead, NERHead, RelationClassificationHead
 import os
 import argparse
-
+from datasets import load_from_disk
 
 
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
@@ -45,13 +47,12 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
                 task_batch = task_batch.to(train_args.device)
                 
                 # loss 
-                output = multi_head_model(task_batch, head_name)
-                # TODO handle crf loss
-                loss = critic(output.squeeze(), task_batch['labels'].float())
+                output = multi_head_model(task_batch, head_name, task_batch)
+                loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name]['loss_func'] else output
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
-                if i % 20 == 0:
-                    wandb.log({f'{head_name}_loss': loss})
+                if i % 50 == 0:
+                    wandb.log({f'{head_name}_loss': loss.item()})
 
             epoch_loss += step_loss.item()
             optim.zero_grad()
@@ -89,46 +90,72 @@ if __name__ == '__main__':
     train_args = parse_args()
     setattr(train_args, 'optim', torch.optim.AdamW)
     
-    # model
+# ----------------------------- Model ------------------------------------------------------------
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
     config = AutoConfig.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(model_name, model_max_length=config.max_position_embeddings)
     pre_trained_model = AutoModel.from_pretrained(model_name)
 
-    # data
+# ----------------------------- Data ------------------------------------------------------------
     torch.manual_seed(train_args.seed)
-    file_path = 'data/acronym_data.txt'
-    dataset = AcronymDataset(file_path=file_path, tokenizer=tokenizer)
-    data = dataset.data
-    dataset.preprocss_dataset()
-
-    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.6,
+    # acronym
+    acronym_data_file_path = 'data/acronym_data.txt'
+    acronym_dataset = AcronymDataset(file_path=acronym_data_file_path, tokenizer=tokenizer)
+    train_loader_for_acronym, val_loader_for_acronym = acronym_dataset.get_dataloaders(train_size=0.6,
                                                                                batch_size=train_args.batch_size)
-    # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
+    
+    # n2c2
+    n2c2_dataset_path = 'data/RelationExtraction/n2c2_dataset'
+    n2c2_dataset = load_from_disk(n2c2_dataset_path)
 
+    # NER
+    medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer)
+    ner_dataloaders = medical_ner_dataset.get_dataloaders()
+    ner_train_dataloader = ner_dataloaders["train"]
+    ner_val_dataloader = ner_dataloaders["validation"]
+
+    # RC
+    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model)
+    rc_dataloaders = medical_rc_dataset.get_dataloaders()
+    rc_train_dataloader = rc_dataloaders["train"]
+    rc_val_dataloader = rc_dataloaders["validation"]
+
+    # ----------------------------- Headers ------------------------------------------------------------
     in_features = config.hidden_size
-    binari_head = ClassificationHead(in_features=in_features, out_features=1)
-    # four_labels_head = ClassificationHead(in_features=in_features, out_features=4)
+    acronym_head = ClassificationHead(in_features=in_features, out_features=1)
+    ner_head = NERHead(num_labels=len(medical_ner_dataset.id_2_label))
+    rc_head = RelationClassificationHead(num_labels=1)
+
 
     classifiers = torch.nn.ModuleDict({
-        "binari_head": binari_head,
-        # "four_labels_head": four_labels_head
+        "acronym_head": acronym_head,
+        "ner_head": ner_head,
+        "rc_head": rc_head
     })
+
 
     multi_head_model = MultiHeadModel(pre_trained_model, classifiers)
     multi_head_model.to(train_args.device)
 
     heads_props = {
-        "binari_head": {
+        "acronym_head": {
             "train_loader": train_loader_for_acronym,
-            "loss_weight": 1.0,
-            "loss_func": torch.nn.BCEWithLogitsLoss()
+            "loss_weight": 0.2,
+            "loss_func": torch.nn.BCEWithLogitsLoss(),
+            "require_batch_for_forward": False
         },
-        # "four_labels_head": {
-        #     "train_loader": train_loader2,
-        #     "loss_weight": 0.8
-
-        # }
+        "ner_head": {
+            "train_loader": ner_train_dataloader,
+            "loss_weight": 0.4,
+            "loss_func": None,
+            "require_batch_for_forward": True
+        },
+        "rc_head": {
+            "train_loader": rc_train_dataloader,
+            "loss_weight": 0.4,
+            "loss_func": torch.nn.BCEWithLogitsLoss(),
+            "require_batch_for_forward": True
+        }
     }
 
     run = wandb.init(
