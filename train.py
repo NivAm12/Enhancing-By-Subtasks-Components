@@ -47,6 +47,8 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
                 loss = critic(output.squeeze(), task_batch['labels'].float())
                 step_loss += loss * heads_props[head_name]['loss_weight']
 
+                if i % 20 == 0:
+                    wandb.log({f'{head_name}_loss': loss})
 
             epoch_loss += step_loss.item()
             optim.zero_grad()
@@ -69,7 +71,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
 if __name__ == '__main__':
     train_args = {
-        "epochs": 20,
+        "epochs": 5,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "lr": 0.01,
         "betas": (0.9, 0.999),
@@ -78,8 +80,6 @@ if __name__ == '__main__':
         "batch_size": 32,
         "save_path": "models/weights"
     }
-
-
 
     # model
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
@@ -94,12 +94,13 @@ if __name__ == '__main__':
     data = dataset.data
     dataset.preprocss_dataset()
 
-    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.7, batch_size=train_args["batch_size"])
+    train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.2,
+                                                                               batch_size=train_args["batch_size"])
     # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
 
     in_features = config.hidden_size
     binari_head = ClassificationHead(in_features=in_features, out_features=1)
-    four_labels_head = ClassificationHead(in_features=in_features, out_features=4)
+    # four_labels_head = ClassificationHead(in_features=in_features, out_features=4)
 
     classifiers = torch.nn.ModuleDict({
         "binari_head": binari_head,
@@ -113,7 +114,7 @@ if __name__ == '__main__':
         "binari_head": {
             "train_loader": train_loader_for_acronym,
             "loss_weight": 1.0,
-            "loss_func": torch.nn.BCELoss()
+            "loss_func": torch.nn.BCEWithLogitsLoss()
         },
         # "four_labels_head": {
         #     "train_loader": train_loader2,

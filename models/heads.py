@@ -13,17 +13,17 @@ class ClassificationHead(nn.Module):
     """
     def __init__(self, in_features: int, out_features: int):
         super(ClassificationHead, self).__init__()
-        self.dropout = nn.Dropout(0.1, inplace=False)
-        self.mean = torch.mean
+        self.dropout = nn.Dropout(0.2, inplace=False)
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
-        self.activation = nn.Sigmoid() if out_features == 1 else nn.Softmax()
+        self.activation = None if out_features == 1 else nn.Softmax()
 
     def forward(self, inputs):
-        outputs = self.dropout(inputs.pooler_output) # 0 is the index of cls token
-        outputs = self.linear(outputs)
-        outputs = self.activation(outputs)
+        # outputs = self.dropout(inputs.pooler_output)
+        outputs = self.linear(inputs.pooler_output) # pooler_output is the index of cls token
+        outputs = outputs if self.activation is None else self.activation(outputs)
 
         return outputs
+
 
 class BERT_CRF(nn.Module):
 
