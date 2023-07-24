@@ -64,7 +64,7 @@ class NERHead(nn.Module):
 
            # loss for each example in the batch. shape: [batch_size] (tensor of length batch_size).
            # the crf loss for each example is calculated considering the true against the predicted sequence of labels,
-           loss = self.crf.forward(emission_scores, labels, crf_mask.type('torch.BoolTensor')) 
+           loss = self.crf.forward(emission_scores, labels, crf_mask.type('torch.BoolTensor').to(labels.device))
            
            return loss.mean()
 

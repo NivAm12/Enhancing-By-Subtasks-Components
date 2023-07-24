@@ -8,7 +8,7 @@ from datasets.arrow_dataset import Dataset
 
 class MedicalRCDataset:
 
-    def __init__(self, dataset : Dataset, tokenizer: AutoTokenizer, pubmedbert, batch_size: int = 32, train_size: int = 0.9):
+    def __init__(self, dataset : Dataset, tokenizer: AutoTokenizer, pubmedbert, batch_size: int = 32, train_size: float = 0.9):
         self._dataset = dataset
         self.tokenizer = tokenizer
         self.pubmedbert = pubmedbert
