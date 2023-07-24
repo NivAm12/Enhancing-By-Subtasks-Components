@@ -28,7 +28,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
     multi_head_model.train()
 
     optim = train_args.optim(multi_head_model.parameters(), lr=train_args.lr, betas=train_args.betas,
-                                weight_decay=train_args["weight_decay"])
+                                weight_decay=train_args.weight_decay)
 
     for epoch in tqdm(range(train_args.epochs)):
         epoch_loss = 0.0
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     dataset.preprocss_dataset()
 
     train_loader_for_acronym, val_loader_for_acronym = dataset.get_dataloaders(train_size=0.6,
-                                                                               batch_size=train_args["batch_size"])
+                                                                               batch_size=train_args.batch_size)
     # train_loader2, _ = dataset.get_dataloaders(train_size=0.9, batch_size=32)
 
     in_features = config.hidden_size
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     })
 
     multi_head_model = MultiHeadModel(pre_trained_model, classifiers)
-    multi_head_model.to(train_args['device'])
+    multi_head_model.to(train_args.device)
 
     heads_props = {
         "binari_head": {
