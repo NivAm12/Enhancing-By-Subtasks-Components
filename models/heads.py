@@ -53,7 +53,6 @@ class NERHead(nn.Module):
         emission_scores = self.activation(emission_scores)
         labels = batch['labels'] if batch is not None else None
         
-
         if labels is not None:
            # we put labels with -100 to 0 because crf handles only labels in range(0, num_labels). Since this label is incorret,
            # we also create crf_mask that have 0 in indexes where lable==-100. Like that, the crf will ignore labels with -100
@@ -67,7 +66,7 @@ class NERHead(nn.Module):
            # the crf loss for each example is calculated considering the true against the predicted sequence of labels,
            loss = self.crf.forward(emission_scores, labels, crf_mask.type('torch.BoolTensor')) 
            
-           return loss
+           return loss.mean()
 
         else:
            # Return predictions for each example. shape: [batch_size, seq_len].
@@ -79,21 +78,7 @@ class NERHead(nn.Module):
 
            return predictions
 
-        # emission = self.classifier(sequence_output) # [32,256,17]
-        # labels=labels.reshape(attention_mask.size()[0],attention_mask.size()[1])
-
-        # if labels is not None:
-        #     loss = -self.crf(log_soft(emission, 2), labels, mask=attention_mask.type(torch.uint8), reduction='mean')
-        #     prediction = self.crf.decode(emission, mask=attention_mask.type(torch.uint8))
-        #     return [loss, prediction]
-
-        # else:
-        #     prediction = self.crf.decode(emission, mask=attention_mask.type(torch.uint8))
-        #     return prediction
-
     def __process_predictions(self, preds, mask):
-
-      
         flatten_mask = mask.flatten().cpu().numpy()
         flatten_preds = [item for sublist in preds for item in sublist]
         final_preds = []
