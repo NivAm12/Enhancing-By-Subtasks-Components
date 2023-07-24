@@ -47,7 +47,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.A
                 task_batch = task_batch.to(train_args.device)
 
                 # loss 
-                output = multi_head_model(task_batch, head_name, task_batch)
+                output = multi_head_model(task_batch, head_name)
                 loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name][
                     'loss_func'] else output
                 step_loss += loss * heads_props[head_name]['loss_weight']
