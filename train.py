@@ -73,6 +73,7 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: dict):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Script to train your model")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"], help="Device to run training on")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     pre_trained_model = AutoModel.from_pretrained(model_name)
 
     # data
-    torch.manual_seed(0)
+    torch.manual_seed(train_args.seed)
     file_path = 'data/acronym_data.txt'
     dataset = AcronymDataset(file_path=file_path, tokenizer=tokenizer)
     data = dataset.data
