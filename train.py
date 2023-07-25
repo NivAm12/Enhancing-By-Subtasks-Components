@@ -30,37 +30,20 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.N
                              weight_decay=train_args.weight_decay)
     scheduler = CosineAnnealingLR(optim, T_max=train_args.epochs)
 
+    # create the data loaders list
+    train_loaders = [head_prop['train_loader'] for head_prop in heads_props.values()]
+    val_loaders = [head_prop['val_loader'] for head_prop in heads_props.values()]
+
     for epoch in tqdm(range(train_args.epochs)):
-        epoch_loss = 0.0
-        # prepare the model weights for training:
-        multi_head_model.train()
-        # create the data loaders list
-        train_loaders = [head_prop['train_loader'] for head_prop in heads_props.values()]
+        # calculate train and val losses per epoch
+        train_epoch_loss, heads_train_losses = run_epoch(multi_head_model, train_loaders, heads_props, train_args,
+                                                         optim, scheduler, do_train=True)
+        val_epoch_loss, heads_val_losses = run_epoch(multi_head_model, val_loaders, heads_props, train_args,
+                                                     do_train=False)
 
-        # iterate the batches simultaneously
-        for i, combined_batch in enumerate(zip(*train_loaders)):
-            step_loss = 0.0
-
-            for task_batch, head_name in zip(combined_batch, heads_props.keys()):
-                critic = heads_props[head_name]['loss_func']
-                task_batch = task_batch.to(train_args.device)
-
-                # loss 
-                output = multi_head_model(task_batch, head_name)
-                loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name][
-                    'loss_func'] else output
-                step_loss += loss * heads_props[head_name]['loss_weight']
-
-            epoch_loss += step_loss.item()
-            optim.zero_grad()
-            step_loss.backward()
-            optim.step()
-
-            # Step the scheduler after each optimizer step
-            scheduler.step()
-
-        epoch_loss /= len(train_loaders[0])
-        wandb.log({'loss per epoch': epoch_loss})
+        wandb.log({'train_loss': train_epoch_loss, 'val_loss': val_epoch_loss})
+        for key, val in heads_train_losses.items():
+            wandb.log({f'{key}_loss': val})
 
         # save the model at each epoch
         if not os.path.exists(train_args.save_path):
@@ -71,6 +54,49 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.N
             'model_state_dict': multi_head_model.state_dict(),
             'optimizer_state_dict': optim.state_dict(),
         }, f'{train_args.save_path}/multi_head_epoch{epoch}.pt')
+
+
+def run_epoch(model, data_loaders, heads_props, train_args, optim=None, scheduler=None, do_train=True):
+    epoch_loss = 0.0
+    head_losses = {head_name: 0.0 for head_name in heads_props.keys()}  # Dictionary to store the losses for each head
+
+    # prepare the model weights for training or validation:
+    if do_train:
+        model.train()
+    else:
+        model.eval()
+
+    # iterate the batches simultaneously
+    for i, combined_batch in enumerate(zip(*data_loaders)):
+        step_loss = 0.0
+
+        for task_batch, head_name in zip(combined_batch, heads_props.keys()):
+            critic = heads_props[head_name]['loss_func']
+            task_batch = task_batch.to(train_args.device)
+
+            with torch.set_grad_enabled(do_train):
+                output = model(task_batch, head_name)
+                loss = critic(output.squeeze(), task_batch['labels'].float()) if heads_props[head_name][
+                    'loss_func'] else output
+
+                step_loss += loss * heads_props[head_name]['loss_weight']
+                # Accumulate the head loss for the current batch
+                head_losses[head_name] += loss.item()
+
+        epoch_loss += step_loss.item()
+
+        if do_train:
+            optim.zero_grad()
+            step_loss.backward()
+            optim.step()
+            scheduler.step()
+
+    # Normalize head and total losses by the number of batches to get the average loss per epoch
+    num_batches = len(data_loaders[0])
+    head_losses = {head_name: loss / num_batches for head_name, loss in head_losses.items()}
+    epoch_loss /= num_batches
+
+    return epoch_loss, head_losses
 
 
 def parse_args():
@@ -84,7 +110,7 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for optimizer")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--save_path", type=str, default="models/weights", help="Path to save model weights")
-    parser.add_argument("--project", type=str, default="nlp_project_huji", help="Wandb project name to use for logs")
+    parser.add_argument("--project", type=str, default="train_val_bertmed", help="Wandb project name to use for logs")
     return parser.parse_args()
 
 
@@ -104,7 +130,7 @@ if __name__ == '__main__':
     # acronym
     acronym_data_file_path = 'data/acronym_data.txt'
     acronym_dataset = AcronymDataset(file_path=acronym_data_file_path, tokenizer=tokenizer)
-    train_loader_for_acronym, val_loader_for_acronym = acronym_dataset.get_dataloaders(train_size=0.9,
+    acronym_train_loader, acronym_val_loader = acronym_dataset.get_dataloaders(train_size=0.9,
                                                                                        batch_size=64)
     # n2c2
     n2c2_dataset_path = 'data/RelationExtraction/n2c2_dataset'
@@ -112,15 +138,15 @@ if __name__ == '__main__':
 
     # NER
     medical_ner_dataset = MedicalNERDataset(n2c2_dataset, tokenizer, train_size=0.9, batch_size=8)
-    ner_dataloaders = medical_ner_dataset.get_dataloaders()
-    ner_train_dataloader = ner_dataloaders["train"]
-    ner_val_dataloader = ner_dataloaders["validation"]
+    ner_data_loaders = medical_ner_dataset.get_dataloaders()
+    ner_train_loader = ner_data_loaders["train"]
+    ner_val_loader = ner_data_loaders["validation"]
 
     # RC
     medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9, batch_size=64)
-    rc_dataloaders = medical_rc_dataset.get_dataloaders()
-    rc_train_dataloader = rc_dataloaders["train"]
-    rc_val_dataloader = rc_dataloaders["validation"]
+    rc_data_loaders = medical_rc_dataset.get_dataloaders()
+    rc_train_loader = rc_data_loaders["train"]
+    rc_val_loader = rc_data_loaders["validation"]
 
     # ----------------------------- Headers ------------------------------------------------------------
     in_features = config.hidden_size
@@ -139,19 +165,22 @@ if __name__ == '__main__':
 
     heads_props = {
         "acronym_head": {
-            "train_loader": train_loader_for_acronym,
+            "train_loader": acronym_train_loader,
+            "val_loader": acronym_val_loader,
             "loss_weight": 0.2,
             "loss_func": torch.nn.BCEWithLogitsLoss(),
             "require_batch_for_forward": False
         },
         "ner_head": {
-            "train_loader": ner_train_dataloader,
+            "train_loader": ner_train_loader,
+            "val_loader": ner_val_loader,
             "loss_weight": 0.4,
             "loss_func": None,
             "require_batch_for_forward": True
         },
         "rc_head": {
-            "train_loader": rc_train_dataloader,
+            "train_loader": rc_train_loader,
+            "val_loader": rc_val_loader,
             "loss_weight": 0.4,
             "loss_func": torch.nn.BCEWithLogitsLoss(),
             "require_batch_for_forward": True
