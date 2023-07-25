@@ -84,12 +84,15 @@ class AcronymDataset:
         with open(self._file_path, "r", errors='ignore') as file:
             for line in file.readlines():
                 split = line.strip().split('|')
-                
+
                 # build the sentence structure
                 source_sentence = split[6]
                 full_name = split[1]
                 acronym_begin = int(split[3])
                 acronym_end = int(split[4]) + 1
+
+                if len(source_sentence) > 350:
+                    continue
 
                 # create the compare sentence with the fit full name
                 compare_sentence = source_sentence[:acronym_begin] + full_name + source_sentence[acronym_end:]
@@ -119,7 +122,7 @@ class AcronymDataset:
             # loop over the samples of this group and create a negative sample
             for index, positive_sample in group.iterrows():
                 # check if we want to create a negative sample and delete the true sample, because we don't want to keep duplicates of the same sentence
-                if random.randint(1, 3) == 1:
+                if random.randint(1, 2) == 1:
                     positive_sample_full_name = positive_sample['full_name']
                     negative_full_names_options = full_names.copy()
                     negative_full_names_options.remove(positive_sample_full_name)
