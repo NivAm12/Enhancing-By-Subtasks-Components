@@ -63,7 +63,7 @@ class MedicalRCDataset:
                                 num_workers=0)
 
         val_dataloader = DataLoader(
-                              val_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", "label"]),
+                              val_dataset.select_columns(["input_ids", "token_type_ids", "attention_mask", 'e1_start_pos', 'e2_start_pos', "label"]),
                               collate_fn=data_collator,
                               batch_size=batch_size,
                               shuffle=shuffle,
