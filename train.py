@@ -108,7 +108,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
     parser.add_argument("--betas", nargs=2, type=float, default=[0.9, 0.999], help="Betas for AdamW optimizer")
     parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for optimizer")
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
     parser.add_argument("--save_path", type=str, default="models/weights", help="Path to save model weights")
     parser.add_argument("--project", type=str, default="train_val_bertmed", help="Wandb project name to use for logs")
     return parser.parse_args()
@@ -131,7 +131,7 @@ if __name__ == '__main__':
     acronym_data_file_path = 'data/acronym_data.txt'
     acronym_dataset = AcronymDataset(file_path=acronym_data_file_path, tokenizer=tokenizer)
     acronym_train_loader, acronym_val_loader = acronym_dataset.get_dataloaders(train_size=0.9,
-                                                                                       batch_size=64)
+                                                                               batch_size=train_args.batch_size)
     # n2c2
     n2c2_dataset_path = 'data/RelationExtraction/n2c2_dataset'
     n2c2_dataset = load_from_disk(n2c2_dataset_path)
@@ -143,7 +143,8 @@ if __name__ == '__main__':
     ner_val_loader = ner_data_loaders["validation"]
 
     # RC
-    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9, batch_size=64)
+    medical_rc_dataset = MedicalRCDataset(n2c2_dataset, tokenizer, pre_trained_model, train_size=0.9,
+                                          batch_size=train_args.batch_size)
     rc_data_loaders = medical_rc_dataset.get_dataloaders()
     rc_train_loader = rc_data_loaders["train"]
     rc_val_loader = rc_data_loaders["validation"]

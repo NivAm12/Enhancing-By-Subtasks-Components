@@ -20,8 +20,8 @@ class ClassificationHead(nn.Module):
         self.activation = None if out_features == 1 else nn.Softmax()
 
     def forward(self, inputs, batch=None):
-        outputs = self.dropout(inputs.pooler_output)
-        outputs = self.linear(inputs.pooler_output)  # pooler_output is the index of cls token
+        outputs = self.dropout(inputs.pooler_output)  # pooler_output is the index of cls token
+        outputs = self.linear(outputs)
         outputs = outputs if self.activation is None else self.activation(outputs)
 
         return outputs
