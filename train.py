@@ -42,8 +42,8 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.N
                                                      do_train=False)
 
         wandb.log({'train_loss': train_epoch_loss, 'val_loss': val_epoch_loss})
-        for key, val in heads_train_losses.items():
-            wandb.log({f'{key}_loss': val})
+        wandb.log({f'{key}_loss': val for key, val in heads_train_losses.items()})
+        wandb.log({f'val_{key}_loss': val for key, val in heads_val_losses.items()})
 
         # save the model at each epoch
         if not os.path.exists(train_args.save_path):
