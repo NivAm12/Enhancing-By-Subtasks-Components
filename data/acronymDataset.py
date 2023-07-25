@@ -30,14 +30,16 @@ class AcronymDataset:
 
     def get_dataloaders(self, train_size: float=0.9, batch_size: int=32, shuffle: bool=True):
         if self.preprocessed_dataset is None:
-            raise ValueError("Preprocessed dataset is not available, create it by using preprocss_dataset before using this method.")    
-
-        # Calculate the number of samples to include in each set.
-        train_size = int(train_size * len(self.preprocessed_dataset))
-        val_size = len(self.preprocessed_dataset) - train_size
+            raise ValueError("Preprocessed dataset is not available, create it by using preprocss_dataset before "
+                             "using this method.")
 
         # split the dataset
-        train_dataset, val_dataset = random_split(self.preprocessed_dataset, [train_size, val_size])
+        self.preprocessed_dataset = self.preprocessed_dataset.class_encode_column(
+            "labels")  # cast "label" column to "ClassLabel" type, to support "stratify_by_column" argument below
+        split = self.preprocessed_dataset.train_test_split(test_size=1 - train_size, stratify_by_column="labels")
+        train_dataset = split["train"]
+        val_dataset = split["test"]
+
         # dynamic padding
         data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer, return_tensors="pt", padding=True)
 
