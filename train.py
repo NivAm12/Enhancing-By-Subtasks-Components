@@ -13,7 +13,7 @@ import argparse
 from datasets import load_from_disk
 
 
-def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.ArgumentParser):
+def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.Namespace):
     """
     Trains a multi-head model.
 
@@ -92,6 +92,7 @@ def parse_args():
 if __name__ == '__main__':
     train_args = parse_args()
     setattr(train_args, 'optim', torch.optim.AdamW)
+    torch.cuda.empty_cache()
 
     # ----------------------------- Model ------------------------------------------------------------
     model_name = 'microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext'
