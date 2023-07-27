@@ -84,7 +84,10 @@ class NERHead(nn.Module):
             return predictions
 
     def __process_predictions(self, preds, mask):
-        flatten_mask = mask.flatten().cpu().numpy()
+
+        mask = mask.cpu().numpy()
+        flatten_mask = mask.flatten()
+
         flatten_preds = [item for sublist in preds for item in sublist]
         final_preds = []
 
@@ -133,6 +136,9 @@ class RelationClassificationHead(nn.Module):
                              :]  # shape: [batch_size, 768]
         joint_embedding = torch.cat((e1_start_embedding, e2_start_embedding), 1)  # shape: [batch_size, 2*768]
         joint_embedding = self.dropout(joint_embedding)
+
+        # logits is the output tensor of a classification network, whose content is the unnormalized
+        # (not scaled between 0 and 1) probabilities.
         logits = self.classifier(joint_embedding)  # shape: [batch_size, num_labels=2]
         # scores = self.activation(logits)
         return logits
