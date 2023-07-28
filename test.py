@@ -7,9 +7,8 @@ from transformers import AutoConfig, AutoTokenizer, AutoModel
 import argparse
 from models.multiHeadModel import MultiHeadModel
 from huggingface_hub import login
+import json
 
-
-# ---------------------------------------------------------------------------------------------
 
 def add_e1_e2_tokens(example):
     """
@@ -412,7 +411,7 @@ if __name__ == '__main__':
 
     if test_args.multi_head_path != '':
         prepare_tokenizer_and_model(multi_head_model.base_model, tokenizer)
-        pretrained_weights = torch.load('models/weights/multi_head_epoch29.pt')['model_state_dict']
+        pretrained_weights = torch.load(test_args.multi_head_path)['model_state_dict']
         multi_head_model.load_state_dict(pretrained_weights)
         multi_head_model.__setattr__('rc_model', multi_head_model.base_model)
     else:
