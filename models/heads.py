@@ -53,7 +53,7 @@ class NERHead(nn.Module):
         embeddings = self.dropout(embeddings)
         emission_scores = self.classifier(embeddings)  # shape: (batch_size, seq_len, num_labels)
         emission_scores = self.activation(emission_scores)
-        labels = batch['labels'] if batch is not None else None
+        labels = batch['labels'] if batch is not None and 'labels' in batch else None
 
         if labels is not None:
             # we put labels with -100 to 0 because crf handles only labels in range(0, num_labels). Since this label
@@ -119,7 +119,7 @@ class RelationClassificationHead(nn.Module):
         self.classifier = nn.Linear(2 * 768, num_labels)
         self.activation = nn.Sigmoid()
 
-    def forward(self, inputs, batch=None):
+    def forward(self, inputs, batch=None, inference=False):
         """
         input_ids: shape - (batch_size, seq_len)
         e1_start: the position of the token [E1_start] in the tokinized sentence ([E1_start] is coming right before the first entity)
@@ -140,15 +140,16 @@ class RelationClassificationHead(nn.Module):
         # logits is the output tensor of a classification network, whose content is the unnormalized
         # (not scaled between 0 and 1) probabilities.
         logits = self.classifier(joint_embedding)  # shape: [batch_size, num_labels=2]
-        # scores = self.activation(logits)
+
+        if inference:
+            logits = self.activation(logits)
+
         return logits
 
-    def predict(self, input_ids, attention_mask, e1_start, e2_start):
+    def predict(self, scores):
         """
         Returns prediction.
         tensor outut shape: [batch_size] (a 1D tensor of length batch_size)
         """
-        with torch.no_grad():
-            scores = self.forward(input_ids, attention_mask, e1_start, e2_start)
-        preds = torch.argmax(scores, axis=-1)
+        preds = 1 if scores > 0.5 else 0
         return preds
