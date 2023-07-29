@@ -112,7 +112,8 @@ def run_epoch(model, data_loaders, heads_props, train_args, optim=None, schedule
     return epoch_loss, head_losses, head_evals
 
 
-def load_data(dataset_benchmark: str, dataset_name: str, train_samples: int, val_samples: int=-1, test_samples: int=-1):
+def load_data(dataset_benchmark: str, dataset_name: str, train_samples: int, val_samples: int = -1,
+              test_samples: int = -1):
     train_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"train[:{train_samples}]")
     val_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"validation[:{val_samples}]")
     test_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"test[:{test_samples}]")
@@ -190,11 +191,12 @@ if __name__ == '__main__':
     # ----------------------------- Data ------------------------------------------------------------
     torch.manual_seed(train_args.seed)
     train_datasets_size = 2400
+    val_dataset_size = 270
 
     # load data
-    task1_data = load_data('glue', 'mrpc', train_samples=train_datasets_size)
-    task2_data = load_data('glue', 'rte', train_samples=train_datasets_size)
-    task3_data = load_data('glue', 'stsb', train_samples=train_datasets_size)
+    task1_data = load_data('glue', 'mrpc', train_samples=train_datasets_size, val_samples=val_dataset_size)
+    task2_data = load_data('glue', 'rte', train_samples=train_datasets_size, val_samples=val_dataset_size)
+    task3_data = load_data('glue', 'stsb', train_samples=train_datasets_size, val_samples=val_dataset_size)
 
     # preprocess
     task1_train_dataset = preprocess_dataset(task1_data['train'], tokenizer, preprocess_func)
@@ -225,8 +227,8 @@ if __name__ == '__main__':
     task3_head = ClassificationHead(in_features=in_features, out_features=1)
 
     classifiers = torch.nn.ModuleDict({
-        # "task1_head": task1_head,
-        # "task2_head": task2_head,
+        "task1_head": task1_head,
+        "task2_head": task2_head,
         "task3_head": task3_head
     })
 
@@ -234,22 +236,22 @@ if __name__ == '__main__':
     multi_head_model.to(train_args.device)
 
     heads_props = {
-        # "task1_head": {
-        #     "train_loader": task1_train_dataloader,
-        #     "val_loader": task1_val_dataloader,
-        #     "loss_weight": 0.3,
-        #     "loss_func": nn.BCEWithLogitsLoss(),
-        #     "eval_metric": load('glue', 'mrpc'),
-        #     "eval_type": "accuracy"
-        # },
-        # "task2_head": {
-        #     "train_loader": task2_train_dataloader,
-        #     "val_loader": task2_val_dataloader,
-        #     "loss_weight": 0.3,
-        #     "loss_func": nn.BCEWithLogitsLoss(),
-        #     "eval_metric": load('glue', 'rte'),
-        #     "eval_type": "accuracy"
-        # },
+        "task1_head": {
+            "train_loader": task1_train_dataloader,
+            "val_loader": task1_val_dataloader,
+            "loss_weight": 0.3,
+            "loss_func": nn.BCEWithLogitsLoss(),
+            "eval_metric": load('glue', 'mrpc'),
+            "eval_type": "accuracy"
+        },
+        "task2_head": {
+            "train_loader": task2_train_dataloader,
+            "val_loader": task2_val_dataloader,
+            "loss_weight": 0.3,
+            "loss_func": nn.BCEWithLogitsLoss(),
+            "eval_metric": load('glue', 'rte'),
+            "eval_type": "accuracy"
+        },
         "task3_head": {
             "train_loader": task3_train_dataloader,
             "val_loader": task3_val_dataloader,
