@@ -21,5 +21,7 @@ The multi-head model can be viewed in ```models/multiHeadModel.py```<br/>  The m
 # Train
 Run:
 
-``` python train.py  --batch_size <batch size> --epochs <number of epochs> --device <device>```
+``` python train.py  --batch_size <batch size> --epochs <number of epochs> --device <device>```<br/>
+
+For the rest of the arguments, please see ```train.py```
 
