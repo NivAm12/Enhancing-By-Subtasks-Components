@@ -8,10 +8,8 @@ from models.heads import ClassificationHead
 import os
 import argparse
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from datasets import load_dataset, Dataset
-from transformers import DataCollatorWithPadding
-from torch.utils.data import DataLoader
 from evaluate import load
+from data.utils import load_data, get_dataloader, preprocess_dataset, compute_metrics, preprocess_func
 
 
 def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.Namespace):
@@ -112,56 +110,6 @@ def run_epoch(model, data_loaders, heads_props, train_args, optim=None, schedule
     return epoch_loss, head_losses, head_evals
 
 
-def load_data(dataset_benchmark: str, dataset_name: str, train_samples: int, val_samples: int = -1,
-              test_samples: int = -1):
-    train_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"train[:{train_samples}]")
-    val_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"validation[:{val_samples}]")
-    test_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"test[:{test_samples}]")
-
-    return {
-        "train": train_dataset,
-        "val": val_dataset,
-        "test": test_dataset,
-    }
-
-
-def preprocess_func(examples, tokenizer):
-    return tokenizer(examples["sentence1"], examples["sentence2"], truncation=True)
-
-
-def preprocess_dataset(dataset: Dataset, tokenizer, preprocess_fn):
-    tokenized_datasets = dataset.map(preprocess_fn, fn_kwargs={"tokenizer": tokenizer})
-    tokenized_datasets = tokenized_datasets.select_columns(["input_ids", "token_type_ids", "attention_mask", "label"])
-    tokenized_datasets = tokenized_datasets.rename_column("label", "labels")
-
-    return tokenized_datasets
-
-
-def get_datloader(dataset, tokenizer, batch_size: int, shuffle: bool):
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, return_tensors="pt", padding=True)
-
-    train_dataloader = DataLoader(
-        dataset,
-        collate_fn=data_collator,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=True,
-        num_workers=0)
-
-    return train_dataloader
-
-
-def compute_metrics(logits, labels, metric, metric_type):
-    if metric_type == 'accuracy':
-        logits = nn.Sigmoid()(logits)
-        logits = torch.round(logits).int()
-
-    result = metric.compute(predictions=logits, references=labels)
-    result = result['accuracy'] if metric_type == 'accuracy' else result['mse']
-
-    return result
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Script to train your model")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
@@ -207,17 +155,17 @@ if __name__ == '__main__':
     task3_val_dataset = preprocess_dataset(task3_data['val'], tokenizer, preprocess_func)
 
     # data loaders
-    task1_train_dataloader = get_datloader(task1_train_dataset, tokenizer,
+    task1_train_dataloader = get_dataloader(task1_train_dataset, tokenizer,
                                            batch_size=train_args.batch_size, shuffle=True)
-    task2_train_dataloader = get_datloader(task2_train_dataset, tokenizer,
+    task2_train_dataloader = get_dataloader(task2_train_dataset, tokenizer,
                                            batch_size=train_args.batch_size, shuffle=True)
-    task3_train_dataloader = get_datloader(task3_train_dataset, tokenizer,
+    task3_train_dataloader = get_dataloader(task3_train_dataset, tokenizer,
                                            batch_size=train_args.batch_size, shuffle=True)
-    task1_val_dataloader = get_datloader(task1_val_dataset, tokenizer,
+    task1_val_dataloader = get_dataloader(task1_val_dataset, tokenizer,
                                          batch_size=train_args.batch_size, shuffle=True)
-    task2_val_dataloader = get_datloader(task2_val_dataset, tokenizer,
+    task2_val_dataloader = get_dataloader(task2_val_dataset, tokenizer,
                                          batch_size=train_args.batch_size, shuffle=True)
-    task3_val_dataloader = get_datloader(task3_val_dataset, tokenizer,
+    task3_val_dataloader = get_dataloader(task3_val_dataset, tokenizer,
                                          batch_size=train_args.batch_size, shuffle=True)
 
     # ----------------------------- Headers ------------------------------------------------------------
@@ -247,7 +195,7 @@ if __name__ == '__main__':
         "task2_head": {
             "train_loader": task2_train_dataloader,
             "val_loader": task2_val_dataloader,
-            "loss_weight": 0.3,
+            "loss_weight": 3,
             "loss_func": nn.BCEWithLogitsLoss(),
             "eval_metric": load('glue', 'rte'),
             "eval_type": "accuracy"
