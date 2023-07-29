@@ -23,3 +23,4 @@ Run:
 
 ``` python train.py  --batch_size <batch size> --epochs <number of epochs> --device <device>```
 
+For the rest of the arguments, please see ```train.py```
