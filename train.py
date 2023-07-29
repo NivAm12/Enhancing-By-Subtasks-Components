@@ -9,9 +9,8 @@ import os
 import argparse
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from datasets import load_dataset, Dataset
-from transformers import DataCollatorForTokenClassification
+from transformers import DataCollatorWithPadding
 from torch.utils.data import DataLoader
-import numpy as np
 from evaluate import load
 
 
@@ -37,16 +36,19 @@ def train(multi_head_model: nn.Module, heads_props: dict, train_args: argparse.N
 
     for epoch in tqdm(range(train_args.epochs)):
         # calculate train and val losses per epoch
-        train_epoch_loss, heads_train_losses = run_epoch(multi_head_model, train_loaders, heads_props, train_args,
-                                                         optim, scheduler, do_train=True)
-        val_epoch_loss, heads_val_losses, head_evals_scores = run_epoch(multi_head_model, val_loaders, heads_props, train_args,
-                                                     do_train=False)
-        
+        train_epoch_loss, heads_train_losses, _ = run_epoch(multi_head_model, train_loaders, heads_props, train_args,
+                                                            optim, scheduler, do_train=True)
+        val_epoch_loss, heads_val_losses, head_evals_scores = run_epoch(multi_head_model, val_loaders, heads_props,
+                                                                        train_args,
+                                                                        do_train=False)
 
-        wandb.log({'train_loss': train_epoch_loss, 'val_loss': val_epoch_loss})
-        wandb.log({f'{key}_loss': val for key, val in heads_train_losses.items()})
-        wandb.log({f'val_{key}_loss': val for key, val in heads_val_losses.items()})
-        wandb.log({f'{key}_score': val for key, val in head_evals_scores.items()})
+        wandb.log({
+            'train_loss': train_epoch_loss,
+            'val_loss': val_epoch_loss,
+            **{f'{key}_loss': val for key, val in heads_train_losses.items()},
+            **{f'val_{key}_loss': val for key, val in heads_val_losses.items()},
+            **{f'{key}_score': val for key, val in head_evals_scores.items()}
+        })
 
         # save the model at each epoch
         if not os.path.exists(train_args.save_path):
@@ -87,10 +89,11 @@ def run_epoch(model, data_loaders, heads_props, train_args, optim=None, schedule
                 step_loss += loss * head_props['loss_weight']
                 # Accumulate the head loss for the current batch
                 head_losses[head_name] += loss.item()
-                
+
                 # evaluate 
                 if not do_train:
-                    head_evals[head_name] += compute_metrics(output, task_batch['labels'], head_props['eval_metric'], head_props['eval_type'])
+                    head_evals[head_name] += compute_metrics(output, task_batch['labels'], head_props['eval_metric'],
+                                                             head_props['eval_type'])
 
         epoch_loss += step_loss.item()
 
@@ -109,28 +112,15 @@ def run_epoch(model, data_loaders, heads_props, train_args, optim=None, schedule
     return epoch_loss, head_losses, head_evals
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Script to train your model")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
-    parser.add_argument("--device", type=str, default="mps", choices=["cuda", "cpu", "mps"],
-                        help="Device to run training on")
-    parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
-    parser.add_argument("--betas", nargs=2, type=float, default=[0.9, 0.999], help="Betas for AdamW optimizer")
-    parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for optimizer")
-    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
-    parser.add_argument("--save_path", type=str, default="models/weights/multitask", help="Path to save model weights")
-    parser.add_argument("--project", type=str, default="train_val_bertmed", help="Wandb project name to use for logs")
-    return parser.parse_args()
-
-
-def load_data(dataset_benchmark: str, dataset_name: str, train_samples: int, test_samples: int):
+def load_data(dataset_benchmark: str, dataset_name: str, train_samples: int, val_samples: int=-1, test_samples: int=-1):
     train_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"train[:{train_samples}]")
-    test_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"validation[:{test_samples}]")
+    val_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"validation[:{val_samples}]")
+    test_dataset = load_dataset(dataset_benchmark, dataset_name, split=f"test[:{test_samples}]")
 
     return {
         "train": train_dataset,
-        "test": test_dataset
+        "val": val_dataset,
+        "test": test_dataset,
     }
 
 
@@ -140,46 +130,50 @@ def preprocess_func(examples, tokenizer):
 
 def preprocess_dataset(dataset: Dataset, tokenizer, preprocess_fn):
     tokenized_datasets = dataset.map(preprocess_fn, fn_kwargs={"tokenizer": tokenizer})
+    tokenized_datasets = tokenized_datasets.select_columns(["input_ids", "token_type_ids", "attention_mask", "label"])
     tokenized_datasets = tokenized_datasets.rename_column("label", "labels")
-    tokenized_datasets.set_format("torch")
 
     return tokenized_datasets
 
-def get_datloaders(dataset, tokenizer, val_size: float, batch_size: int, shuffle: bool):
-    split = dataset.train_test_split(test_size=val_size)
-    train_dataset = split["train"]
-    val_dataset = split["test"]
 
-    data_collator = DataCollatorForTokenClassification(tokenizer=tokenizer, return_tensors="pt", padding=True) 
+def get_datloader(dataset, tokenizer, batch_size: int, shuffle: bool):
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, return_tensors="pt", padding=True)
 
     train_dataloader = DataLoader(
-        train_dataset,
+        dataset,
         collate_fn=data_collator,
         batch_size=batch_size,
         shuffle=shuffle,
         drop_last=True,
         num_workers=0)
 
-    val_dataloader = DataLoader(
-        val_dataset,
-        collate_fn=data_collator,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        drop_last=True,
-        num_workers=0)
+    return train_dataloader
 
-    return train_dataloader, val_dataloader
 
 def compute_metrics(logits, labels, metric, metric_type):
-
     if metric_type == 'accuracy':
         logits = nn.Sigmoid()(logits)
-        logits = np.round(logits).astype(np.int8)
+        logits = torch.round(logits).int()
 
-    result =  metric.compute(predictions=logits, references=labels)
-    result = result['accuracy'] if metric_type == 'accuracy' else result
+    result = metric.compute(predictions=logits, references=labels)
+    result = result['accuracy'] if metric_type == 'accuracy' else result['mse']
 
     return result
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Script to train your model")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"],
+                        help="Device to run training on")
+    parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate")
+    parser.add_argument("--betas", nargs=2, type=float, default=[0.9, 0.999], help="Betas for AdamW optimizer")
+    parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay for optimizer")
+    parser.add_argument("--batch_size", type=int, default=64, help="Batch size for training")
+    parser.add_argument("--save_path", type=str, default="models/weights/multitask", help="Path to save model weights")
+    parser.add_argument("--project", type=str, default="train_val_bertmed", help="Wandb project name to use for logs")
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
@@ -196,33 +190,43 @@ if __name__ == '__main__':
     # ----------------------------- Data ------------------------------------------------------------
     torch.manual_seed(train_args.seed)
     train_datasets_size = 2400
-    val_size = 0.1
 
     # load data
-    task1_data = load_data('glue', 'mrpc', train_samples=train_datasets_size, test_samples=train_datasets_size)
-    task2_data = load_data('glue', 'rte', train_samples=train_datasets_size, test_samples=train_datasets_size)
-    task3_data = load_data('glue', 'stsb', train_samples=train_datasets_size, test_samples=train_datasets_size)
+    task1_data = load_data('glue', 'mrpc', train_samples=train_datasets_size)
+    task2_data = load_data('glue', 'rte', train_samples=train_datasets_size)
+    task3_data = load_data('glue', 'stsb', train_samples=train_datasets_size)
 
     # preprocess
     task1_train_dataset = preprocess_dataset(task1_data['train'], tokenizer, preprocess_func)
     task2_train_dataset = preprocess_dataset(task2_data['train'], tokenizer, preprocess_func)
     task3_train_dataset = preprocess_dataset(task3_data['train'], tokenizer, preprocess_func)
+    task1_val_dataset = preprocess_dataset(task1_data['val'], tokenizer, preprocess_func)
+    task2_val_dataset = preprocess_dataset(task2_data['val'], tokenizer, preprocess_func)
+    task3_val_dataset = preprocess_dataset(task3_data['val'], tokenizer, preprocess_func)
 
     # data loaders
-    task1_train_dataloader, task1_val_dataloader = get_datloaders(task1_train_dataset, tokenizer, val_size=val_size, batch_size=train_args.batch_size, shuffle=True)
-    task2_train_dataloader, task2_val_dataloader = get_datloaders(task2_train_dataset, tokenizer, val_size=val_size, batch_size=train_args.batch_size, shuffle=True)
-    task3_train_dataloader, task3_val_dataloader = get_datloaders(task3_train_dataset, tokenizer, val_size=val_size, batch_size=train_args.batch_size, shuffle=True)
+    task1_train_dataloader = get_datloader(task1_train_dataset, tokenizer,
+                                           batch_size=train_args.batch_size, shuffle=True)
+    task2_train_dataloader = get_datloader(task2_train_dataset, tokenizer,
+                                           batch_size=train_args.batch_size, shuffle=True)
+    task3_train_dataloader = get_datloader(task3_train_dataset, tokenizer,
+                                           batch_size=train_args.batch_size, shuffle=True)
+    task1_val_dataloader = get_datloader(task1_val_dataset, tokenizer,
+                                         batch_size=train_args.batch_size, shuffle=True)
+    task2_val_dataloader = get_datloader(task2_val_dataset, tokenizer,
+                                         batch_size=train_args.batch_size, shuffle=True)
+    task3_val_dataloader = get_datloader(task3_val_dataset, tokenizer,
+                                         batch_size=train_args.batch_size, shuffle=True)
 
     # ----------------------------- Headers ------------------------------------------------------------
     in_features = config.hidden_size
     task1_head = ClassificationHead(in_features=in_features, out_features=1)
     task2_head = ClassificationHead(in_features=in_features, out_features=1)
     task3_head = ClassificationHead(in_features=in_features, out_features=1)
-    
 
     classifiers = torch.nn.ModuleDict({
-        "task1_head": task1_head,
-        "task2_head": task2_head,
+        # "task1_head": task1_head,
+        # "task2_head": task2_head,
         "task3_head": task3_head
     })
 
@@ -230,38 +234,35 @@ if __name__ == '__main__':
     multi_head_model.to(train_args.device)
 
     heads_props = {
-        "task1_head": {
-            "train_loader": task1_train_dataset,
-            "val_loader": task1_val_dataloader,
-            "loss_weight": 0.3,
-            "loss_func": nn.BCEWithLogitsLoss(),
-            "eval_metric": load('glue', 'mrpc'),
-            "eval_type": "accuracy",
-            "val_size": train_datasets_size * val_size
-        },
-        "task2_head": {
-            "train_loader": task2_train_dataset,
-            "val_loader": task2_val_dataloader,
-            "loss_weight": 0.3,
-            "loss_func": nn.BCEWithLogitsLoss(),
-            "eval_metric": load('glue', 'rte'),
-            "eval_type": "accuracy",
-            "val_size": train_datasets_size * val_size
-        },
+        # "task1_head": {
+        #     "train_loader": task1_train_dataloader,
+        #     "val_loader": task1_val_dataloader,
+        #     "loss_weight": 0.3,
+        #     "loss_func": nn.BCEWithLogitsLoss(),
+        #     "eval_metric": load('glue', 'mrpc'),
+        #     "eval_type": "accuracy"
+        # },
+        # "task2_head": {
+        #     "train_loader": task2_train_dataloader,
+        #     "val_loader": task2_val_dataloader,
+        #     "loss_weight": 0.3,
+        #     "loss_func": nn.BCEWithLogitsLoss(),
+        #     "eval_metric": load('glue', 'rte'),
+        #     "eval_type": "accuracy"
+        # },
         "task3_head": {
-            "train_loader": task3_train_dataset,
+            "train_loader": task3_train_dataloader,
             "val_loader": task3_val_dataloader,
             "loss_weight": 0.3,
-            "loss_func": torch.nn.BCEWithLogitsLoss(),
-            "eval_metric": nn.MSELoss(),
-            "eval_type": "regression",
-            "val_size": train_datasets_size * val_size
+            "loss_func": nn.MSELoss(),
+            "eval_metric": load('mse'),
+            "eval_type": "regression"
         }
     }
 
     run = wandb.init(
         project=train_args.project,
-        config=train_args
+        config=vars(train_args)
     )
 
     train(multi_head_model, heads_props, train_args)
