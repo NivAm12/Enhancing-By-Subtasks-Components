@@ -15,6 +15,9 @@ The multi-head model can be viewed in ```models/multiHeadModel.py```<br/>  The m
 ## Multi-head model architecture 
 ![image](https://github.com/NivAm12/Enhancing-By-Subtasks-Components/assets/49129250/00e70a4c-00de-416b-be88-3fce760f3230)
 
+![Advanced NLP Project](https://github.com/NivAm12/Enhancing-By-Subtasks-Components/assets/68702877/d672ae7a-e7ee-4443-88d7-3b8481e225ad)
+
+
 # Install
 ``` pip install -r requirements.txt ```
 
